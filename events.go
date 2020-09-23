@@ -66,7 +66,7 @@ func (eb *eventBuffer) QueueEvent(event *lpEvent) error {
 	if lastElement := eb.List.Back(); lastElement != nil {
 		lastEvent, ok := lastElement.Value.(*lpEvent)
 		if !ok {
-			return fmt.Errorf("Found non-event type in event buffer.")
+			return fmt.Errorf("Found non-event type in event buffer")
 		}
 		eb.oldestEventTime = lastEvent.Timestamp
 	}
@@ -95,7 +95,7 @@ func (eb *eventBuffer) GetEventsSince(since time.Time,
 	for element := eb.List.Front(); element != nil; element = element.Next() {
 		event, ok := element.Value.(*lpEvent)
 		if !ok {
-			return events, fmt.Errorf("Found non-event type in event buffer.")
+			return events, fmt.Errorf("Found non-event type in event buffer")
 		}
 		// is event time after 'since' time arg? convert 'since' to epoch ms
 		if event.Timestamp > timeToEpochMilliseconds(since) {
@@ -114,8 +114,7 @@ func (eb *eventBuffer) GetEventsSince(since time.Time,
 		for element := lastGoodItem; element != nil; element = prev {
 			event, ok := element.Value.(*lpEvent)
 			if !ok {
-				return events, fmt.Errorf(
-					"Found non-event type in event buffer.")
+				return events, fmt.Errorf("Found non-event type in event buffer")
 			}
 			// we already know this event is after 'since'
 			events = append(events,
@@ -146,7 +145,7 @@ func (eb *eventBuffer) DeleteEventsOlderThan(olderThanTimeMs int64) error {
 	for element := eb.List.Back(); element != nil; element = prev {
 		event, ok := element.Value.(*lpEvent)
 		if !ok {
-			return fmt.Errorf("Found non-event type in event buffer.")
+			return fmt.Errorf("Found non-event type in event buffer")
 		}
 		// Advance iteration before List.Remove() invalidates element.prev
 		prev = element.Prev()

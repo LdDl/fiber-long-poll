@@ -9,7 +9,7 @@ import (
 // period of inactivity (no new events).
 type expiringBuffer struct {
 	// references an eventBuffer
-	eventBuffer_ptr *eventBuffer
+	eventBufferPtr *eventBuffer
 	// The subscription category for the given event buffer
 	// This is needed so we can clean up our category-to-Item map
 	// by doing a simple key lookup and removing the eventBuffer ref
@@ -78,7 +78,6 @@ func (pq *priorityQueue) updatePriority(item *expiringBuffer, priority int64) {
 func (pq *priorityQueue) peakTopPriority() (int64, error) {
 	if len(*pq) > 0 {
 		return (*pq)[0].priority, nil
-	} else {
-		return -1, fmt.Errorf("PriorityQueue is empty.  No top priority.")
 	}
+	return -1, fmt.Errorf("PriorityQueue is empty. No top priority")
 }

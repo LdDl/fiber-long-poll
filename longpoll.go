@@ -15,8 +15,7 @@ import (
 )
 
 const (
-	// Magic number to represent 'Forever' in
-	// LongpollOptions.EventTimeToLiveSeconds
+	// FOREVER - Magic number to represent 'Forever' in LongpollOptions.EventTimeToLiveSeconds
 	FOREVER = -1001
 )
 
@@ -114,7 +113,7 @@ type Options struct {
 	DeleteEventAfterFirstRetrieval bool
 }
 
-// Creates a LongpollManager, starts the internal pub-sub goroutine and returns
+// StartLongpoll - Creates a LongpollManager, starts the internal pub-sub goroutine and returns
 // the manager reference which you can use anywhere to Publish() events or
 // attach a URL to the manager's SubscriptionHandler member.  This function
 // takes an Options struct that configures the longpoll behavior.
@@ -272,8 +271,8 @@ func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests 
 			// Lets the subscription manager know it can discard this request's
 			// channel.
 			clientTimeouts <- subscription.clientCategoryPair
-			timeout_resp := makeTimeoutResponse(time.Now())
-			ctx.JSON(timeout_resp)
+			timeoutResp := makeTimeoutResponse(time.Now())
+			ctx.JSON(timeoutResp)
 		case events := <-subscription.Events:
 			// Consume event.  Subscription manager will automatically discard
 			// this client's channel upon sending event
@@ -369,9 +368,9 @@ func (sm *subscriptionManager) run() error {
 }
 
 func (sm *subscriptionManager) seeIfTimeToPurgeStaleCategories() error {
-	now_ms := timeToEpochMilliseconds(time.Now())
-	if now_ms > (sm.lastStaleCategoryPurgeTime + int64(1000*sm.staleCategoryPurgePeriodSeconds)) {
-		sm.lastStaleCategoryPurgeTime = now_ms
+	nowMS := timeToEpochMilliseconds(time.Now())
+	if nowMS > (sm.lastStaleCategoryPurgeTime + int64(1000*sm.staleCategoryPurgePeriodSeconds)) {
+		sm.lastStaleCategoryPurgeTime = nowMS
 		return sm.purgeStaleCategories()
 	}
 	return nil
@@ -387,7 +386,7 @@ func (sm *subscriptionManager) handleNewClient(newClient *clientSubscription) er
 		// First clean up anything that expired
 		sm.checkExpiredEvents(expiringBuf)
 		// We have a buffer for this sub category, check for buffered events
-		if events, err := expiringBuf.eventBuffer_ptr.GetEventsSince(newClient.LastEventTime,
+		if events, err := expiringBuf.eventBufferPtr.GetEventsSince(newClient.LastEventTime,
 			sm.DeleteEventAfterFirstRetrieval); err == nil && len(events) > 0 {
 			doQueueRequest = false
 			if sm.LoggingEnabled {
@@ -398,9 +397,9 @@ func (sm *subscriptionManager) handleNewClient(newClient *clientSubscription) er
 			// and end long poll request, so no need to have manager store
 			newClient.Events <- events
 		} else if err != nil {
-			funcErr = fmt.Errorf("Error getting events from event buffer: %s.\n", err)
+			funcErr = fmt.Errorf("Error getting events from event buffer: %s", err)
 			if sm.LoggingEnabled {
-				log.Printf("Error getting events from event buffer: %s.\n", err)
+				log.Printf("Error getting events from event buffer: %s", err)
 			}
 		}
 		// Buffer Could have been emptied due to the  DeleteEventAfterFirstRetrieval
@@ -446,10 +445,10 @@ func (sm *subscriptionManager) handleClientDisconnect(disconnected *clientCatego
 	} else {
 		// Sub category entry not found.  Weird.  Log this!
 		if sm.LoggingEnabled {
-			log.Printf("Warning: client disconnect for non-existing subscription category: %q\n",
+			log.Printf("Warning: client disconnect for non-existing subscription category: %q",
 				disconnected.SubscriptionCategory)
 		}
-		funcErr = fmt.Errorf("Client disconnect for non-existing subscription category: %q\n",
+		funcErr = fmt.Errorf("Client disconnect for non-existing subscription category: %q",
 			disconnected.SubscriptionCategory)
 	}
 	return funcErr
@@ -497,16 +496,16 @@ func (sm *subscriptionManager) handleNewEvent(newEvent *lpEvent) error {
 	if doBufferEvents {
 		// Add event buffer for this event's subscription category if doesn't exist
 		if !bufFound {
-			now_ms := timeToEpochMilliseconds(time.Now())
+			nowMS := timeToEpochMilliseconds(time.Now())
 			buf := &eventBuffer{
 				list.New(),
 				sm.MaxEventBufferSize,
-				now_ms,
+				nowMS,
 			}
 			expiringBuf = &expiringBuffer{
-				eventBuffer_ptr: buf,
-				category:        newEvent.Category,
-				priority:        now_ms,
+				eventBufferPtr: buf,
+				category:       newEvent.Category,
+				priority:       nowMS,
 			}
 			if sm.LoggingEnabled {
 				log.Printf("Creating new eventBuffer for category: %v",
@@ -516,11 +515,11 @@ func (sm *subscriptionManager) handleNewEvent(newEvent *lpEvent) error {
 			sm.priorityQueueUpdateBufferCreated(expiringBuf)
 		}
 		// queue event in event buffer
-		if qErr := expiringBuf.eventBuffer_ptr.QueueEvent(newEvent); qErr != nil {
+		if qErr := expiringBuf.eventBufferPtr.QueueEvent(newEvent); qErr != nil {
 			if sm.LoggingEnabled {
-				log.Printf("Error: failed to queue event.  err: %s\n", qErr)
+				log.Printf("Error: failed to queue event.  err: %s", qErr)
 			}
-			funcErr = fmt.Errorf("Error: failed to queue event.  err: %s\n", qErr)
+			funcErr = fmt.Errorf("Error: failed to queue event.  err: %s", qErr)
 		} else {
 			if sm.LoggingEnabled {
 				log.Printf("SubscriptionManager: queued event: %v.\n", newEvent)
@@ -548,13 +547,13 @@ func (sm *subscriptionManager) checkExpiredEvents(expiringBuf *expiringBuffer) e
 		return nil
 	}
 	// determine what time is considered the threshold for expiration
-	now_ms := timeToEpochMilliseconds(time.Now())
-	expiration_time := now_ms - int64(sm.EventTimeToLiveSeconds*1000)
-	return expiringBuf.eventBuffer_ptr.DeleteEventsOlderThan(expiration_time)
+	nowMS := timeToEpochMilliseconds(time.Now())
+	expirationTime := nowMS - int64(sm.EventTimeToLiveSeconds*1000)
+	return expiringBuf.eventBufferPtr.DeleteEventsOlderThan(expirationTime)
 }
 
 func (sm *subscriptionManager) deleteBufferIfEmpty(expiringBuf *expiringBuffer, category string) error {
-	if expiringBuf.eventBuffer_ptr.List.Len() == 0 { // TODO: nil check?  or is never possible
+	if expiringBuf.eventBufferPtr.List.Len() == 0 { // TODO: nil check?  or is never possible
 		if sm.LoggingEnabled {
 			log.Printf("Deleting empty eventBuffer for category: %s\n", category)
 		}
@@ -572,19 +571,19 @@ func (sm *subscriptionManager) purgeStaleCategories() error {
 	if sm.LoggingEnabled {
 		log.Println("SubscriptionManager: performing stale category purge.")
 	}
-	now_ms := timeToEpochMilliseconds(time.Now())
-	expiration_time := now_ms - int64(sm.EventTimeToLiveSeconds*1000)
+	nowMS := timeToEpochMilliseconds(time.Now())
+	expirationTime := nowMS - int64(sm.EventTimeToLiveSeconds*1000)
 	for sm.bufferPriorityQueue.Len() > 0 {
 		topPriority, err := sm.bufferPriorityQueue.peakTopPriority()
 		if err != nil {
 			// queue is empty (threw empty buffer error) nothing to purge
 			break
 		}
-		if topPriority > expiration_time {
+		if topPriority > expirationTime {
 			// The eventBuffer with the oldest most-recent-event-Timestamp is
 			// still too recent to be expired, nothing to purge.
 			break
-		} else { // topPriority <= expiration_time
+		} else { // topPriority <= expirationTime
 			// This buffer's most recent event is older than our TTL, so remove
 			// the entire buffer.
 			if item, ok := heap.Pop(&sm.bufferPriorityQueue).(*expiringBuffer); ok {
@@ -595,7 +594,7 @@ func (sm *subscriptionManager) purgeStaleCategories() error {
 				// remove from our category-to-buffer map:
 				delete(sm.SubEventBuffer, item.category)
 				// invalidate references
-				item.eventBuffer_ptr = nil
+				item.eventBufferPtr = nil
 			} else {
 				log.Printf("ERROR: found item in bufferPriorityQueue of unexpected type when attempting a TTL purge.\n")
 			}
@@ -653,6 +652,6 @@ func (sm *subscriptionManager) priorityQueueUpdateDeletedBuffer(expiringBuf *exp
 	}
 	// NOTE: this call is O(log(n)) where n is len of heap (queue)
 	heap.Remove(&sm.bufferPriorityQueue, expiringBuf.index)
-	expiringBuf.eventBuffer_ptr = nil // remove reference to eventBuffer
+	expiringBuf.eventBufferPtr = nil // remove reference to eventBuffer
 	return nil
 }
