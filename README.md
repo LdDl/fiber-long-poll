@@ -178,4 +178,4 @@ JavaScript client side:
 If you have troubles or questions please [open an issue](https://github.com/LdDl/fiber-long-poll/issues/new).
 
 ## License
-You cant check it [here](LICENSE.md)
+You can check it [here](LICENSE.md)
