@@ -78,7 +78,7 @@ func main() {
 	go generatingMessages(manager)
 	server.Get("/unread_messages", GetMessages(manager))
 
-	err = server.Listen("8080")
+	err = server.Listen(":8080")
 	if err != nil {
 		fmt.Printf("Can't start server due the error: %s\n", err.Error())
 	}
