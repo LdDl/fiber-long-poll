@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gofiber/fiber"
+	"github.com/gofiber/fiber/v2"
 	uuid "github.com/google/uuid"
 )
 
@@ -208,36 +208,37 @@ func newclientSubscription(subscriptionCategory string, lastEventTime time.Time)
 func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests chan clientSubscription,
 	clientTimeouts chan<- clientCategoryPair, loggingEnabled bool) func(ctx *fiber.Ctx) {
 	return func(ctx *fiber.Ctx) {
-		timeout, err := strconv.Atoi(string(ctx.Fasthttp.PostArgs().Peek("timeout")))
+
+		timeout, err := strconv.Atoi(string(ctx.Context().PostArgs().Peek("timeout")))
 		if loggingEnabled {
-			log.Println("Handling HTTP request at ", ctx.Fasthttp.URI())
+			log.Println("Handling HTTP request at ", ctx.Context().URI())
 		}
 		// We are going to return json no matter what:
-		ctx.Fasthttp.Response.Header.Set("Content-Type", "application/json")
+		ctx.Context().Response.Header.Set("Content-Type", "application/json")
 		// Don't cache response:
-		ctx.Fasthttp.Response.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
-		ctx.Fasthttp.Response.Header.Set("Pragma", "no-cache")                                   // HTTP 1.0.
-		ctx.Fasthttp.Response.Header.Set("Expires", "0")                                         // Proxies.
+		ctx.Context().Response.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
+		ctx.Context().Response.Header.Set("Pragma", "no-cache")                                   // HTTP 1.0.
+		ctx.Context().Response.Header.Set("Expires", "0")                                         // Proxies.
 		if err != nil || timeout > maxTimeoutSeconds || timeout < 1 {
 			if loggingEnabled {
 				log.Printf("Error: Invalid timeout param.  Must be 1-%d. Got: %q.\n",
-					maxTimeoutSeconds, ctx.Fasthttp.PostArgs().Peek("timeout"))
+					maxTimeoutSeconds, ctx.Context().PostArgs().Peek("timeout"))
 			}
-			io.WriteString(ctx.Fasthttp.Response.BodyWriter(), fmt.Sprintf("{\"error\": \"Invalid timeout arg.  Must be 1-%d.\"}", maxTimeoutSeconds))
+			io.WriteString(ctx.Context().Response.BodyWriter(), fmt.Sprintf("{\"error\": \"Invalid timeout arg.  Must be 1-%d.\"}", maxTimeoutSeconds))
 			return
 		}
-		category := string(ctx.Fasthttp.PostArgs().Peek("category"))
+		category := string(ctx.Context().PostArgs().Peek("category"))
 		if len(category) == 0 || len(category) > 1024 {
 			if loggingEnabled {
 				log.Printf("Error: Invalid subscription category, must be 1-1024 characters long.\n")
 			}
-			io.WriteString(ctx.Fasthttp.Response.BodyWriter(), "{\"error\": \"Invalid subscription category, must be 1-1024 characters long.\"}")
+			io.WriteString(ctx.Context().Response.BodyWriter(), "{\"error\": \"Invalid subscription category, must be 1-1024 characters long.\"}")
 			return
 		}
 		// Default to only looking for current events
 		lastEventTime := time.Now()
 		// since_time is string of milliseconds since epoch
-		lastEventTimeParam := string(ctx.Fasthttp.PostArgs().Peek("since_time"))
+		lastEventTimeParam := string(ctx.Context().PostArgs().Peek("since_time"))
 		if len(lastEventTimeParam) > 0 {
 			// Client is requesting any event from given timestamp
 			// parse time
@@ -248,7 +249,7 @@ func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests 
 					log.Printf("Error parsing last_event_time arg. Parm Value: %s, Error: %s.\n",
 						lastEventTimeParam, parseError)
 				}
-				io.WriteString(ctx.Fasthttp.Response.BodyWriter(), "{\"error\": \"Invalid last_event_time arg.\"}")
+				io.WriteString(ctx.Context().Response.BodyWriter(), "{\"error\": \"Invalid last_event_time arg.\"}")
 				return
 			}
 		}
@@ -257,7 +258,7 @@ func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests 
 			if loggingEnabled {
 				log.Printf("Error creating new Subscription: %s.\n", err)
 			}
-			io.WriteString(ctx.Fasthttp.Response.BodyWriter(), "{\"error\": \"Error creating new Subscription.\"}")
+			io.WriteString(ctx.Context().Response.BodyWriter(), "{\"error\": \"Error creating new Subscription.\"}")
 			return
 		}
 		subscriptionRequests <- *subscription
@@ -265,7 +266,7 @@ func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests 
 		// event that a client crashes or the connection goes down.  We don't
 		// need to wait around to fulfill a subscription if no one is going to
 		// receive it
-		disconnectNotify := ctx.Fasthttp.Done()
+		disconnectNotify := ctx.Context().Done()
 		select {
 		case <-time.After(time.Duration(timeout) * time.Second):
 			// Lets the subscription manager know it can discard this request's

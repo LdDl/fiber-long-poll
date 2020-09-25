@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	lp "github.com/LdDl/fiber-long-poll"
+	lp "github.com/LdDl/fiber-long-poll/v2"
 	"github.com/gofiber/cors"
 	"github.com/gofiber/fiber"
 	"github.com/savsgio/go-logger"
