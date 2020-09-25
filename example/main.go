@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	lp "github.com/LdDl/fiber-long-poll/v2"
+	lp "github.com/LdDl/fiber-long-poll"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/valyala/fasthttp"
@@ -18,7 +18,7 @@ var (
 
 func main() {
 
-	config := fiber.Settings{
+	config := fiber.Config{
 		ErrorHandler: func(ctx *fiber.Ctx, err error) error {
 			log.Println(err)
 			return ctx.Status(fasthttp.StatusInternalServerError).JSON(errors.New("panic error"))
@@ -61,7 +61,7 @@ func main() {
 
 // GetMessages Long polling request
 func GetMessages(manager *lp.LongpollManager) func(ctx *fiber.Ctx) error {
-	return func(ctx *fiber.Ctx) {
+	return func(ctx *fiber.Ctx) error {
 		ctx.Context().PostArgs().Set("timeout", "10")
 		ctx.Context().PostArgs().Set("category", fmt.Sprintf("unread_messages_for_%s", userID))
 		return manager.SubscriptionHandler(ctx)
