@@ -5,13 +5,13 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	uuid "github.com/google/uuid"
+	"github.com/valyala/fasthttp"
 )
 
 const (
@@ -48,7 +48,7 @@ type LongpollManager struct {
 	subManager          *subscriptionManager
 	eventsIn            chan<- lpEvent
 	stopSignal          chan<- bool
-	SubscriptionHandler func(ctx *fiber.Ctx)
+	SubscriptionHandler func(ctx *fiber.Ctx) error
 }
 
 // Publish an event for a given subscription category.  This event can have any
@@ -206,8 +206,8 @@ func newclientSubscription(subscriptionCategory string, lastEventTime time.Time)
 
 // get web handler that has closure around sub chanel and clientTimeout channnel
 func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests chan clientSubscription,
-	clientTimeouts chan<- clientCategoryPair, loggingEnabled bool) func(ctx *fiber.Ctx) {
-	return func(ctx *fiber.Ctx) {
+	clientTimeouts chan<- clientCategoryPair, loggingEnabled bool) func(ctx *fiber.Ctx) error {
+	return func(ctx *fiber.Ctx) error {
 
 		timeout, err := strconv.Atoi(string(ctx.Context().PostArgs().Peek("timeout")))
 		if loggingEnabled {
@@ -224,16 +224,14 @@ func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests 
 				log.Printf("Error: Invalid timeout param.  Must be 1-%d. Got: %q.\n",
 					maxTimeoutSeconds, ctx.Context().PostArgs().Peek("timeout"))
 			}
-			io.WriteString(ctx.Context().Response.BodyWriter(), fmt.Sprintf("{\"error\": \"Invalid timeout arg.  Must be 1-%d.\"}", maxTimeoutSeconds))
-			return
+			return ctx.Status(fasthttp.StatusInternalServerError).JSON(fiber.Map{"error": fmt.Sprintf("Invalid timeout arg.  Must be 1-%d.", maxTimeoutSeconds)})
 		}
 		category := string(ctx.Context().PostArgs().Peek("category"))
 		if len(category) == 0 || len(category) > 1024 {
 			if loggingEnabled {
 				log.Printf("Error: Invalid subscription category, must be 1-1024 characters long.\n")
 			}
-			io.WriteString(ctx.Context().Response.BodyWriter(), "{\"error\": \"Invalid subscription category, must be 1-1024 characters long.\"}")
-			return
+			return ctx.Status(fasthttp.StatusInternalServerError).JSON(fiber.Map{"error": "Invalid subscription category, must be 1-1024 characters long."})
 		}
 		// Default to only looking for current events
 		lastEventTime := time.Now()
@@ -249,8 +247,7 @@ func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests 
 					log.Printf("Error parsing last_event_time arg. Parm Value: %s, Error: %s.\n",
 						lastEventTimeParam, parseError)
 				}
-				io.WriteString(ctx.Context().Response.BodyWriter(), "{\"error\": \"Invalid last_event_time arg.\"}")
-				return
+				return ctx.Status(fasthttp.StatusInternalServerError).JSON(fiber.Map{"error": "Invalid last_event_time arg."})
 			}
 		}
 		subscription, err := newclientSubscription(category, lastEventTime)
@@ -258,8 +255,7 @@ func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests 
 			if loggingEnabled {
 				log.Printf("Error creating new Subscription: %s.\n", err)
 			}
-			io.WriteString(ctx.Context().Response.BodyWriter(), "{\"error\": \"Error creating new Subscription.\"}")
-			return
+			return ctx.Status(fasthttp.StatusInternalServerError).JSON(fiber.Map{"error": "Error creating new Subscription."})
 		}
 		subscriptionRequests <- *subscription
 		// Listens for connection close and un-register subscription in the
@@ -273,18 +269,19 @@ func getLongPollSubscriptionHandler(maxTimeoutSeconds int, subscriptionRequests 
 			// channel.
 			clientTimeouts <- subscription.clientCategoryPair
 			timeoutResp := makeTimeoutResponse(time.Now())
-			ctx.JSON(timeoutResp)
+			return ctx.JSON(timeoutResp)
 		case events := <-subscription.Events:
 			// Consume event.  Subscription manager will automatically discard
 			// this client's channel upon sending event
 			// NOTE: event is actually []Event
-			ctx.JSON(eventResponse{&events})
+			return ctx.JSON(eventResponse{&events})
 		case <-disconnectNotify:
 			// Client connection closed before any events occurred and before
 			// the timeout was exceeded.  Tell manager to forget about this
 			// client.
 			clientTimeouts <- subscription.clientCategoryPair
 		}
+		return ctx.JSON(nil)
 	}
 }
 
