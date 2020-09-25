@@ -31,7 +31,7 @@ import (
 	"log"
 	"time"
 
-	lp "github.com/LdDl/fiber-long-poll"
+	lp "github.com/LdDl/fiber-long-poll/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/valyala/fasthttp"
