@@ -31,10 +31,9 @@ import (
 	"log"
 	"time"
 
-	lp "github.com/LdDl/fiber-long-poll"
-	"github.com/gofiber/cors"
-	"github.com/gofiber/fiber"
-	"github.com/savsgio/go-logger"
+	lp "github.com/LdDl/fiber-long-poll/v2"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/valyala/fasthttp"
 )
 
@@ -44,19 +43,18 @@ var (
 
 func main() {
 
-	config := &fiber.Settings{
-		ErrorHandler: func(ctx *fiber.Ctx, err error) {
-			logger.Printf("Panic error for request on \"%s\": %v\n", ctx.Fasthttp.URI().Path(), err)
+	config := fiber.Settings{
+		ErrorHandler: func(ctx *fiber.Ctx, err error) error {
 			log.Println(err)
-			ctx.Status(fasthttp.StatusInternalServerError).JSON(errors.New("panic error"))
+			return ctx.Status(fasthttp.StatusInternalServerError).JSON(errors.New("panic error"))
 		},
 		IdleTimeout: 10 * time.Second,
 	}
 	allCors := cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type", "Content-Length", "Accept", "Accept-Encoding", "X-HttpRequest"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowOrigins:     "*",
+		AllowHeaders:     "Origin, Authorization, Content-Type, Content-Length, Accept, Accept-Encoding, X-HttpRequest",
+		AllowMethods:     "GET, POST, PUT, DELETE",
+		ExposeHeaders:    "Content-Length",
 		AllowCredentials: true,
 		MaxAge:           5600,
 	})
@@ -87,11 +85,11 @@ func main() {
 }
 
 // GetMessages Long polling request
-func GetMessages(manager *lp.LongpollManager) func(ctx *fiber.Ctx) {
+func GetMessages(manager *lp.LongpollManager) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) {
-		ctx.Fasthttp.PostArgs().Set("timeout", "10")
-		ctx.Fasthttp.PostArgs().Set("category", fmt.Sprintf("unread_messages_for_%s", userID))
-		manager.SubscriptionHandler(ctx)
+		ctx.Context().PostArgs().Set("timeout", "10")
+		ctx.Context().PostArgs().Set("category", fmt.Sprintf("unread_messages_for_%s", userID))
+		return manager.SubscriptionHandler(ctx)
 	}
 }
 
